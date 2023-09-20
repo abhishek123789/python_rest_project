@@ -1,9 +1,11 @@
 import uuid
 from flask import request
 from flask.views import MethodView
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from flask_smorest import Blueprint, abort
-from db import stores
-from schemas import PlainStoreSchema
+from schemas import PlainStoreSchema, StoreSchema
+from models import StoreModel
+from db import db
 
 blp = Blueprint("stores", __name__, description="Operations on stores")
 
@@ -25,17 +27,19 @@ class Store(MethodView):
 
 @blp.route("/store")
 class StoreList(MethodView):
+    @blp.response(200, StoreSchema(many=True))
     def get(self):
-        return {"stores": list(stores.values())}
+        return StoreModel.query.all()
 
-    @blp.arguments(PlainStoreSchema)
+    @blp.arguments(StoreSchema)
     def post(self, store_data):
-        
-        for store in stores.values():
-            if store_data["name"] == store["name"]:
-                abort(400, message="Store already exists")
-        
-        store_id = uuid.uuid4().hex
-        store = {**store_data, "id": store_id }
-        stores[store_id] = store
-        return store, 201
+        store = StoreModel(**store_data)
+        try:
+            db.session.add(store)
+            db.session.commit()
+        except IntegrityError:
+            abort(400, message="abc")
+        except SQLAlchemyError:
+            abort(400, message="xyz")
+
+        return store
